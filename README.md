@@ -1,6 +1,6 @@
 # Translation API
 
-Это API для перевода текста с использованием модели **M2M100** от Facebook. API поддерживает перевод текста на несколько языков, а также работу с батчами текстов.
+Это сервис для перевода текста с использованием модели **M2M100** от Facebook. API поддерживает перевод текста на несколько языков, а также работу с несколькими текстами и зыками.
 
 ## Установка
 
@@ -294,18 +294,29 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 ### docker-compose.yml
 
 ```yaml
-version: '3.7'
+name: translate_mBART_50
+
 services:
-  app:
-    build: .
+  ros-humble-master: 
+    build:
+      context: ../
+      dockerfile: ./docker/Dockerfile
+    volumes:
+      - ../:/app/
+    env_file:
+      - ./.env
     ports:
-      - "8000:8000"
-    environment:
-      - ENV=production
+      - "8000:8000" 
+    networks:
+      - robot_network
+
+networks:
+  robot_network:
+    driver: bridge
 ```
 
 Чтобы запустить приложение в Docker, используйте:
 
 ```bash
-docker-compose up
+docker-compose up --build
 ```
