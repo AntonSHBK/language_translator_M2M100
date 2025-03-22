@@ -9,8 +9,8 @@
 1. Клонируйте репозиторий:
 
    ```bash
-   git clone https://github.com/AntonSHBK/language_translator_mBART_50.git
-   cd language_translator_mBART_50
+   git clone https://github.com/AntonSHBK/language_translator_M2M100.git
+   cd language_translator_M2M100
    ```
 
 2. Создайте виртуальное окружение:
