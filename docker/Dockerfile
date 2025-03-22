@@ -1,23 +1,25 @@
 # Используем официальный образ Debian
 FROM debian:bullseye-slim
 
-# Обновляем систему и устанавливаем зависимости для Python и других необходимых библиотек
-RUN apt-get update && \
-    apt-get install -y \
-    build-essential \
+# Устанавливаем зависимости
+RUN apt-get update && apt-get install -y \
     python3-pip \
     python3-dev \
+    build-essential \
     curl \
-    && apt-get clean
+    git \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 # Устанавливаем рабочую директорию
 WORKDIR /app
 
-# Копируем все файлы в контейнер
+# Копируем файлы проекта
 COPY . /app
 
-# Устанавливаем зависимости из requirements.txt
-RUN pip3 install --no-cache-dir -r requirements.txt
+# Установка зависимостей
+RUN pip3 install --no-cache-dir --upgrade pip && \
+    pip3 install --no-cache-dir -r requirements.txt
 
-# Запускаем приложение с помощью Uvicorn
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Команда по умолчанию (может быть переопределена в docker-compose)
+# CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

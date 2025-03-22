@@ -2,7 +2,9 @@
 
 Это сервис для перевода текста с использованием модели **M2M100** от Facebook. API поддерживает перевод текста на несколько языков, а также работу с несколькими текстами и зыками.
 
-## Установка
+<img src="docs/api.jpg" alt="Project Logo" width="1200"/>  
+
+## Установка локально
 
 1. Клонируйте репозиторий:
 
@@ -151,14 +153,12 @@
 | zu        | Зулусский                       | Язык, говорящийся в Южной Африке.                   | Южная Африка            |
 
 
-Полный список поддерживаемых языков можно найти в коде в переменной `SUPPORTED_LANGUAGES`.
-
 ## Запуск сервера
 
-1. Для запуска серверного приложения используйте **Uvicorn**. Запустите сервер с помощью следующей команды:
+1. Для запуска серверного приложения используйте **Uvicorn**. Запустите сервер с помощью следующей команды (находясь в корне проекта):
 
    ```bash
-   uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4 --reload --log-level info
+   uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
    ```
 
    - **`--reload`**: Эта опция позволяет автоматически перезагружать сервер при изменениях в коде, что полезно для разработки.
@@ -166,7 +166,7 @@
 2. После запуска сервера вы сможете получить доступ к API по адресу:
 
    ```
-   http://127.0.0.1:8000
+   http://127.0.0.1:8000/
    ```
 
 3. Для тестирования API можно использовать **Swagger UI**, который доступен по следующему адресу:
@@ -183,13 +183,13 @@
 
 **POST** `/api/translate`
 
-Этот запрос переводит один текст на несколько языков.
+Этот запрос переводит один или несколько текстов на несколько языков.
 
 #### Тело запроса:
 
 ```json
 {
-  "text": ["The head of the United Nations says there is no military solution in Syria"],
+  "texts": ["The head of the United Nations says there is no military solution in Syria"],
   "source_lang": "en",
   "target_langs": ["fr", "es", "de"]
 }
@@ -199,19 +199,43 @@
 
 ```json
 {
-  "translations": [
+  "translation": [
     {
-      "fr": ["Le chef des Nations Unies dit qu'il n'y a pas de solution militaire en Syrie"],
-      "es": ["El jefe de las Naciones Unidas dice que no hay solución militar en Siria"],
-      "de": ["UN-Chef sagt, es gibt keine militärische Lösung in Syrien"]
+      "fr": "Le chef des Nations Unies dit qu'il n'y a pas de solution militaire en Syrie",
+      "es": "El jefe de las Naciones Unidas dice que no hay solución militar en Siria",
+      "de": "UN-Chef sagt, es gibt keine militärische Lösung in Syrien"
     }
   ]
 }
 ```
 
+### Пример запроса для перевода одного текста
+
+**POST** `/api/translate_single`
+
+Этот запрос переводит один текст на один целевой язык.
+
+#### Тело запроса:
+
+```json
+{
+  "text": "The head of the United Nations says there is no military solution in Syria",
+  "source_lang": "en",
+  "target_lang": "fr"
+}
+```
+
+#### Ответ:
+
+```json
+{
+  "translation": "Le chef des Nations Unies dit qu'il n'y a pas de solution militaire en Syrie"
+}
+```
+
 ### Пример запроса для перевода батча текстов
 
-**POST** `/api/batch_translate`
+**POST** `/api/translate`
 
 Этот запрос переводит несколько текстов на несколько языков.
 
@@ -219,7 +243,7 @@
 
 ```json
 {
-  "text": ["Hello, world!", "How are you?", "Good morning!"],
+  "texts": ["Hello, world!", "How are you?", "Good morning!"],
   "source_lang": "en",
   "target_langs": ["fr", "es", "de"]
 }
@@ -229,12 +253,22 @@
 
 ```json
 {
-  "translations": [
-    [
-      {"fr": ["Bonjour, le monde!"], "es": ["¡Hola, mundo!"], "de": ["Hallo, Welt!"]},
-      {"fr": ["Comment ça va?"], "es": ["¿Cómo estás?"], "de": ["Wie geht's?"]},
-      {"fr": ["Bonjour!"], "es": ["¡Buenos días!"], "de": ["Guten Morgen!"]}
-    ]
+  "translation": [
+    {
+      "fr": "Bonjour, le monde!",
+      "es": "¡Hola, mundo!",
+      "de": "Hallo, Welt!"
+    },
+    {
+      "fr": "Comment ça va?",
+      "es": "¿Cómo estás?",
+      "de": "Wie geht's?"
+    },
+    {
+      "fr": "Bonjour!",
+      "es": "¡Buenos días!",
+      "de": "Guten Morgen!"
+    }
   ]
 }
 ```
@@ -245,19 +279,27 @@ Swagger UI генерирует документацию для вашего API
 
 1. **`POST /api/translate`**: Переводит текст на несколько языков.
    - **Тело запроса**:
-     - `text`: Список строк для перевода.
-     - `source_lang`: Исходный язык текста.
+     - `texts`: Список строк для перевода.
+     - `source_lang`: Исходный язык текста (опционально, если не указано, определяется автоматически).
      - `target_langs`: Список целевых языков.
    - **Ответ**:
-     - Возвращает переведенные строки для каждого языка.
+     - Возвращает переведенные строки для каждого языка в списке `target_langs` для каждого текста.
 
-2. **`POST /api/batch_translate`**: Переводит несколько текстов на несколько языков.
+2. **`POST /api/translate_single`**: Переводит один текст на один целевой язык.
    - **Тело запроса**:
-     - `text`: Список строк для перевода.
-     - `source_lang`: Исходный язык текста.
+     - `text`: Строка для перевода.
+     - `source_lang`: Исходный язык текста (опционально, если не указано, определяется автоматически).
+     - `target_lang`: Целевой язык.
+   - **Ответ**:
+     - Возвращает переведенную строку для целевого языка.
+
+3. **`POST /api/batch_translate`**: Переводит несколько текстов на несколько языков.
+   - **Тело запроса**:
+     - `texts`: Список строк для перевода.
+     - `source_lang`: Исходный язык текста (опционально, если не указано, определяется автоматически).
      - `target_langs`: Список целевых языков.
    - **Ответ**:
-     - Возвращает переведенные строки для каждого текста и языка.
+     - Возвращает переведенные строки для каждого текста на все целевые языки. Каждый переведенный текст представлен словарем, где ключами являются коды целевых языков. 
 
 ## Логирование
 
@@ -265,58 +307,20 @@ Swagger UI генерирует документацию для вашего API
 
 ## Тестирование
 
-Для тестирования API используется **pytest**. Запустите тесты с помощью команды:
+Для тестирования используется **pytest**. Запустите тесты с помощью команды:
 
 ```bash
-pytest
+ pytest app/tests/test_api.py -v
+ pytest app/tests/test_translate.py -v
 ```
 
 Тесты покрывают основные функции перевода текста и перевода батчей текстов.
 
 ## Контейнеризация (Docker)
 
-Если вы хотите развернуть приложение в Docker, используйте следующий **Dockerfile** и **docker-compose.yml**.
-
-### Dockerfile
-
-```dockerfile
-FROM python:3.9-slim
-
-WORKDIR /app
-
-COPY . /app
-
-RUN pip install --no-cache-dir -r requirements.txt
-
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-```
-
-### docker-compose.yml
-
-```yaml
-name: translate_mBART_50
-
-services:
-  ros-humble-master: 
-    build:
-      context: ../
-      dockerfile: ./docker/Dockerfile
-    volumes:
-      - ../:/app/
-    env_file:
-      - ./.env
-    ports:
-      - "8000:8000" 
-    networks:
-      - robot_network
-
-networks:
-  robot_network:
-    driver: bridge
-```
-
-Чтобы запустить приложение в Docker, используйте:
+Если вы хотите развернуть приложение в Docker, используйте **Dockerfile** и **docker-compose.yml**.
 
 ```bash
+cd docker
 docker-compose up --build
 ```
