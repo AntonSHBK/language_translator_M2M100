@@ -19,8 +19,8 @@ services:
       --reload
     tty: true
     networks:
-      - robot_network
+      - translate_service_network
 
 networks:
-  robot_network:
+  translate_service_network:
     driver: bridge

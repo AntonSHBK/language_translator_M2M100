@@ -11,7 +11,10 @@ BASE_DIR = Path(os.path.dirname(os.path.abspath(__file__)))
 
 class Settings(BaseSettings):
     # Название модели по умолчанию
+    # https://huggingface.co/facebook/m2m100_1.2B
     MODEL_NAME: str = "facebook/m2m100_418M"
+    # MODEL_NAME: str = "facebook/m2m100_1.2B"
+    # MODEL_NAME: str = "facebook/m2m100-12B-avg-10-ckpt"
 
     # Директория для кэширования модели (относительно BASE_DIR)
     CACHE_DIR: Path = Field(default=BASE_DIR / "data" / "cache_dir")
