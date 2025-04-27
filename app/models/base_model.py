@@ -32,7 +32,7 @@ class BaseTranslationModel(ABC):
         self.model_name = model_name
         self.cache_dir = cache_dir
         self.device = device
-        self.params_dict = kwargs  # Дополнительные параметры
+        self.params_dict = kwargs
         self.supported_languages: List[str] = []
         
         # Используем логгер из utils

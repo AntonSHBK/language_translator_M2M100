@@ -1,4 +1,4 @@
-# models/translate_model.py
+import re
 from pathlib import Path
 from typing import List, Dict, Optional
 
@@ -50,7 +50,7 @@ class TranslationModel(BaseTranslationModel):
             self.model_name, 
             cache_dir=str(self.cache_dir) if self.cache_dir else None
         ).to(self.device)
-        self.tokenizer = M2M100Tokenizer.from_pretrained(
+        self.tokenizer: M2M100Tokenizer = M2M100Tokenizer.from_pretrained(
             self.model_name, 
             cache_dir=str(self.cache_dir) if self.cache_dir else None
         )
@@ -63,6 +63,7 @@ class TranslationModel(BaseTranslationModel):
         :param text: Текст для определения языка.
         :return: Код языка или None, если язык не определён.
         """
+        self.logger.info("Определение языка")
         try:
             detected_lang = detect(text)
             if detected_lang in self.supported_languages:
@@ -88,107 +89,280 @@ class TranslationModel(BaseTranslationModel):
             return False
 
         return True
-
-    def translate(self, text: str, source_lang: str, target_lang: str) -> str:
+    
+    def generate(
+        self,
+        model_inputs,
+        target_lang: str,
+        max_length: int = 512,
+        num_beams: int = 4,
+        length_penalty: float = 1.2,
+        repetition_penalty: float = 1.0,
+        temperature: float = 1.0,
+        top_k: int = 50,
+        top_p: float = 0.95,
+        do_sample: bool = False,
+        no_repeat_ngram_size: int = 3,
+        early_stopping: bool = True,
+        
+    ) -> str:
         """
-        Переводит текст с одного языка на другой.
+        Генерация перевода с управляемыми параметрами.
+
+        :param model_inputs: Подготовленные входные тензоры.
+        :param target_lang: Целевой язык.
+        :param max_length: Максимальная длина вывода.
+        :param num_beams: Кол-во лучей (beam search).
+        :param repetition_penalty: Штраф за повторы.
+        :param temperature: Температура генерации.
+        :param top_k: Top-k sampling.
+        :param top_p: Top-p (nucleus) sampling.
+        :param do_sample: Использовать ли сэмплирование.
+        :param no_repeat_ngram_size: Запрет повторов одинаковых фраз.
+        :param early_stopping: Раннее завершение beam search.
+        :return: Переведённый текст.
+        """
+        generated_tokens = self.model.generate(
+            **model_inputs,
+            forced_bos_token_id=self.tokenizer.lang_code_to_id[target_lang],
+            max_length=max_length,
+            num_beams=num_beams,
+            repetition_penalty=repetition_penalty,
+            temperature=temperature,
+            top_k=top_k,
+            top_p=top_p,
+            do_sample=do_sample,
+            no_repeat_ngram_size=no_repeat_ngram_size,
+            early_stopping=early_stopping,
+            length_penalty=length_penalty,
+        )
+
+        return self.tokenizer.batch_decode(
+            generated_tokens, skip_special_tokens=True
+        )[0]
+
+        
+    def tokenize(
+        self, 
+        text: str, 
+        source_lang: str,
+        truncation: bool = True,
+        padding: bool = True,
+        max_length: int = 512,
+        return_attention_mask: bool = True,
+        add_special_tokens: bool = True
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Токенизация текста с настраиваемыми параметрами.
+
+        :param text: Текст для токенизации.
+        :param source_lang: Код исходного языка.
+        :param truncation: Усекать ли текст, если он слишком длинный.
+        :param padding: Добавлять ли паддинги.
+        :param max_length: Максимальная длина (в токенах).
+        :param return_attention_mask: Возвращать ли attention mask.
+        :param add_special_tokens: Добавлять ли специальные токены (<s>, </s>, и т.д.).
+        :return: Словарь с токенизированным текстом.
+        """
+        self.tokenizer.src_lang = source_lang
+            
+        tokenized_text = self.tokenizer(
+            text,
+            return_tensors="pt",
+            truncation=truncation,
+            padding=padding,
+            max_length=max_length,
+            return_attention_mask=return_attention_mask,
+            add_special_tokens=add_special_tokens
+        ).to(self.device)
+                
+        return tokenized_text
+    
+    def preprocess_text(self, text: str) -> str:
+        text = text.replace("\n", " ")
+        # Удаляем лишние пробелы и переносы строк
+        text = re.sub(r'\s+', ' ', text).strip()
+        return text
+
+    def split_text_to_blocks(
+        self,
+        text: str,
+        source_lang: str,
+        max_tokens: int = 256,
+        buffer: int = 8
+    ) -> List[str]:
+        text = self.preprocess_text(text)
+        sentences = re.split(r'(?<=[.!?]) +', text)
+
+        blocks = []
+        
+        for sentence in sentences:
+
+            tokenized = self.tokenize(
+                text=sentence,
+                source_lang=source_lang,
+                truncation=False,
+                padding=False,
+                max_length=None,
+            )
+            length = tokenized["input_ids"].shape[1]
+
+            if length + buffer <= max_tokens:
+                blocks.append(sentence)
+            else:
+                words = sentence.split()
+                mid = len(words) // 2
+
+                left_part = " ".join(words[:mid])
+                right_part = " ".join(words[mid:])
+
+                left_blocks = self.split_text_to_blocks(
+                    text=left_part,
+                    source_lang=source_lang,
+                    max_tokens=max_tokens,
+                    buffer=buffer
+                )
+                right_blocks = self.split_text_to_blocks(
+                    text=right_part,
+                    source_lang=source_lang,
+                    max_tokens=max_tokens,
+                    buffer=buffer
+                )
+
+                blocks.extend(left_blocks + right_blocks)
+
+        return blocks
+    
+    def _translate(
+        self,
+        text: str, 
+        source_lang: Optional[str], 
+        target_lang: str,
+        **kwargs
+    ):  
+        output_max_length = kwargs.get("output_max_length", 512)
+        num_beams = kwargs.get("num_beams", 5)
+        length_penalty = kwargs.get("length_penalty", 1.2)
+        repetition_penalty = kwargs.get("repetition_penalty", 1.0)
+        temperature = kwargs.get("temperature", 1.0)
+        top_k = kwargs.get("top_k", 50)
+        top_p = kwargs.get("top_p", 0.95)
+        do_sample = kwargs.get("do_sample", False)
+        no_repeat_ngram_size = kwargs.get("no_repeat_ngram_size", 3)
+        early_stopping = kwargs.get("early_stopping", True)
+
+        truncation = kwargs.get("truncation", True)
+        input_max_length = kwargs.get("input_max_length", 256)
+        padding = kwargs.get("padding", True)
+        add_special_tokens = kwargs.get("add_special_tokens", True)
+        
+        model_inputs = self.tokenize(
+            text, 
+            source_lang, 
+            truncation=truncation,
+            padding=padding,
+            max_length=input_max_length,
+            add_special_tokens=add_special_tokens
+        )
+        
+        translated_text = self.generate(
+            model_inputs=model_inputs,
+            target_lang=target_lang,
+            max_length=output_max_length,
+            num_beams=num_beams,
+            repetition_penalty=repetition_penalty,
+            temperature=temperature,
+            top_k=top_k,
+            top_p=top_p,
+            do_sample=do_sample,
+            no_repeat_ngram_size=no_repeat_ngram_size,
+            early_stopping=early_stopping,
+            length_penalty=length_penalty
+        )
+        # self.logger.info("_translate() END")
+        return translated_text
+            
+    def translate(
+        self, 
+        text: str, 
+        target_lang: str,
+        source_lang: Optional[str] = None, 
+        **kwargs
+    ) -> str:
+        """
+        Переводит текст с одного языка на другой, автоматически разбивая длинные тексты.
 
         :param text: Текст для перевода.
         :param source_lang: Исходный язык.
         :param target_lang: Целевой язык.
+        :param kwargs: Все параметры токенизации и генерации.
         :return: Переведённый текст.
         """
+        input_max_length = kwargs.get("input_max_length", 256)
+        buffer_window = kwargs.get("buffer_window", 8)
+        
+        if source_lang is None:
+            detected = self.detect_language(text)
+            if detected is None:
+                return text
+            source_lang = detected
+
         if not self.is_language_supported(source_lang):
             self.logger.warning(f"Исходный язык {source_lang} не поддерживается.")
             return text
 
         if not self.is_language_supported(target_lang):
             self.logger.warning(f"Целевой язык {target_lang} не поддерживается.")
-            return text
-
-        # Устанавливаем исходный язык для токенизатора
-        self.tokenizer.src_lang = source_lang
-
-        # Токенизация текста
-        model_inputs = self.tokenizer(text, return_tensors="pt").to(self.device)
-
-        # Генерация перевода
-        generated_tokens = self.model.generate(
-            **model_inputs,
-            forced_bos_token_id=self.tokenizer.lang_code_to_id[target_lang]
+            return text      
+                
+        blocks_texts = self.split_text_to_blocks(
+            text=text, 
+            source_lang=source_lang,
+            max_tokens=input_max_length, 
+            buffer=buffer_window
         )
 
-        # Декодирование переведённого текста
-        translated_text = self.tokenizer.batch_decode(
-            generated_tokens, skip_special_tokens=True
-        )[0]
-        return translated_text
+        translations = []
+        for block in blocks_texts:
+            translated = self._translate(
+                text=block,
+                source_lang=source_lang,
+                target_lang=target_lang,
+                **kwargs
+            )
+            translations.append(translated)
+
+        if len(translations) == 1:
+            return translations[0]
+        return " ".join(translations)
 
     def translate_batch(
         self,
-        texts: List[str], 
-        source_lang: Optional[str], 
-        target_langs: List[str]
-    ) -> List[Dict[str, str]]:
+        texts: List[str],
+        target_langs: List[str],
+        source_lang: Optional[str] = None,
+        **kwargs
+    ) -> Dict[str, List[str]]:
         """
-        Переводит каждый текст из списка `texts` на каждый язык из списка `target_langs`.
+        Переводит список текстов на несколько целевых языков.
 
         :param texts: Список текстов для перевода.
-        :param source_lang: Исходный язык. Если None, язык определяется автоматически.
-        :param target_langs: Список целевых языков для перевода каждого текста.
-        :return: Список словарей с переведёнными текстами для каждого целевого языка.
+        :param target_langs: Список целевых языков.
+        :param source_lang: Исходный язык (опционально).
+        :param kwargs: Дополнительные параметры генерации/токенизации.
+        :return: Словарь вида {язык: [переводы]}.
         """
-        translated_texts = []
+        # Инициализируем пустой результат для каждого языка
+        translations = {lang: [] for lang in target_langs}
 
         for text in texts:
-            # Определяем исходный язык, если он не указан
-            if source_lang is None:
-                source_language = self.detect_language(text)
-                if source_language is None:
-                    self.logger.warning(f"Не удалось определить язык текста: {text}")
-                    translated_texts.append({"default": text})  # Возвращаем исходный текст
-                    continue
-            else:
-                source_language = source_lang
-
-            # Проверяем, поддерживается ли исходный язык
-            if not self.is_language_supported(source_language):
-                self.logger.warning(f"Язык {source_language} (исходный) не поддерживается.")
-                translated_texts.append({"default": text})
-                continue
-
-            # Устанавливаем исходный язык для токенизатора
-            self.tokenizer.src_lang = source_language
-
-            # Токенизация текста
-            model_inputs = self.tokenizer(
-                text, 
-                return_tensors="pt", 
-                padding=True, 
-                truncation=True
-            ).to(self.device)
-
-            # Переводим текст на каждый целевой язык
-            translated_text = {}
             for target_lang in target_langs:
-                # Проверяем, поддерживается ли целевой язык
-                if not self.is_language_supported(target_lang):
-                    self.logger.warning(f"Язык {target_lang} (целевой) не поддерживается.")
-                    translated_text[target_lang] = text  # Возвращаем исходный текст
-                    continue
-
-                # Генерация перевода
-                generated_tokens = self.model.generate(
-                    **model_inputs,
-                    forced_bos_token_id=self.tokenizer.lang_code_to_id[target_lang]
+                translated_text = self.translate(
+                    text=text,
+                    source_lang=source_lang,
+                    target_lang=target_lang,
+                    **kwargs
                 )
+                translations[target_lang].append(translated_text)
 
-                # Декодирование переведённого текста
-                translated_text[target_lang] = self.tokenizer.batch_decode(
-                    generated_tokens, skip_special_tokens=True
-                )[0]  # Берем первый элемент, так как batch_decode возвращает список
-
-            # Добавляем результат перевода в общий список
-            translated_texts.append(translated_text)
-
-        return translated_texts
+        return translations

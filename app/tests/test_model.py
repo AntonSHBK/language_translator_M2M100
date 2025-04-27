@@ -11,7 +11,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 from app.models.translate_model import TranslationModel
 
 
-# Инициализация модели
 @pytest.fixture(scope="module")
 def translation_model():
     return TranslationModel(
@@ -29,11 +28,15 @@ def test_translate_single(translation_model):
     source_lang = "en"
     target_lang = "fr"
 
-    translated_text = translation_model.translate(text, source_lang, target_lang)
+    translated_text = translation_model.translate(
+        text=text,
+        source_lang=source_lang,
+        target_lang=target_lang
+    )
 
     assert translated_text is not None
     assert isinstance(translated_text, str)
-    assert len(translated_text) > 0  # Переведенный текст должен быть непустым
+    assert len(translated_text) > 0  # Переведённый текст должен быть непустым
 
 def test_translate_batch(translation_model):
     texts = [
@@ -43,14 +46,22 @@ def test_translate_batch(translation_model):
     source_lang = "en"
     target_langs = ["fr", "es", "de"]
 
-    translated_texts = translation_model.translate_batch(texts, source_lang, target_langs)
+    translated_texts = translation_model.translate_batch(
+        texts=texts,
+        target_langs=target_langs,
+        source_lang=source_lang
+    )
 
-    assert len(translated_texts) == len(texts)
-    for translated in translated_texts:
-        for lang in target_langs:
-            assert lang in translated
-            assert isinstance(translated[lang], str)
-            assert len(translated[lang]) > 0  # Переведенный текст не должен быть пустым
+    assert isinstance(translated_texts, dict)
+    assert all(lang in translated_texts for lang in target_langs), "Не все целевые языки присутствуют в ответе"
+
+    for lang in target_langs:
+        translations = translated_texts[lang]
+        assert isinstance(translations, list)
+        assert len(translations) == len(texts), "Количество переводов должно совпадать с количеством текстов"
+        for translation in translations:
+            assert isinstance(translation, str)
+            assert len(translation) > 0, "Переведённый текст не должен быть пустым"
 
 def test_is_language_supported(translation_model):
     supported_lang = "en"

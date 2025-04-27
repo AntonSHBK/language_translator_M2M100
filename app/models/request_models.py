@@ -1,42 +1,35 @@
-from pydantic import BaseModel, Field, constr
+
 from typing import List, Optional
 
+from pydantic import BaseModel, Field, constr, field_validator
 
 class TranslateRequest(BaseModel):
     texts: List[constr(min_length=1)] = Field(
-        ..., 
-        min_length=1,
-        description="Список текстов для перевода (не может быть пустым)",
-        json_schema_extra={"example": ["Hello", "Good morning"]}
+        ...,
+        description="Список текстов для перевода (каждый текст должен быть непустым)",
+        examples=[["Hello", "Good morning"]],
     )
     target_langs: List[str] = Field(
-        ..., 
-        min_length=1,
-        description="Список целевых языков (ISO-коды, например: 'fr', 'de', 'es')",
-        json_schema_extra={"example": ["fr", "de", "es"]}
+        ...,
+        description="Список целевых языков перевода (ISO-коды, например: 'fr', 'de', 'es')",
+        examples=[["fr", "de", "es"]],
     )
     source_lang: Optional[str] = Field(
-        None, 
-        description="Исходный язык (например: 'en'). Если не указан, определяется автоматически.",
-        json_schema_extra={"example": "en"}
+        None,
+        description="Исходный язык текста (например: 'en'). Если не указан, язык будет определён автоматически.",
+        examples=["en"],
     )
+    
+    @field_validator('texts')
+    @classmethod
+    def validate_texts(cls, v):
+        if not v:
+            raise ValueError('Список текстов не может быть пустым.')
+        return v
 
-
-class SingleTranslateRequest(BaseModel):
-    text: constr(min_length=1) = Field(
-        ..., 
-        min_length=1,
-        description="Один текст для перевода (не может быть пустым)",
-        json_schema_extra={"example": "Good evening"}
-    )
-    target_lang: str = Field(
-        ..., 
-        min_length=1,
-        description="Целевой язык (ISO-код, например: 'fr')",
-        json_schema_extra={"example": "fr"}
-    )
-    source_lang: Optional[str] = Field(
-        None, 
-        description="Исходный язык (например: 'en'). Если не указан, определяется автоматически.",
-        json_schema_extra={"example": "en"}
-    )
+    @field_validator('target_langs')
+    @classmethod
+    def validate_target_langs(cls, v):
+        if not v:
+            raise ValueError('Список целевых языков не может быть пустым.')
+        return v

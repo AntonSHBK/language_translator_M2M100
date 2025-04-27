@@ -1,6 +1,7 @@
 # tests/test_api.py
 import sys
 import os
+import json
 
 import pytest
 from fastapi.testclient import TestClient
@@ -10,7 +11,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 from app.main import app
 
-# Создание клиента FastAPI
 client = TestClient(app)
 
 
@@ -31,16 +31,17 @@ def test_translate_text():
 
     result = response.json()
     assert "translation" in result
-    assert isinstance(result["translation"], list)
-    assert len(result["translation"]) == 1
+    translation = result["translation"]
 
-    first_translation = result["translation"][0]
-    assert isinstance(first_translation, dict)
-    assert "fr" in first_translation
-    assert isinstance(first_translation["fr"], str)
-    assert len(first_translation["fr"]) > 0
-    
-       
+    assert isinstance(translation, dict)
+    for lang in ["fr", "es", "de"]:
+        assert lang in translation
+        assert isinstance(translation[lang], list)
+        assert len(translation[lang]) == 1  # Один текст -> один перевод
+        assert isinstance(translation[lang][0], str)
+        assert len(translation[lang][0]) > 0
+
+
 def test_translate_without_source_lang():
     request_data = {
         "texts": ["This is an automatically detected sentence."],
@@ -50,65 +51,68 @@ def test_translate_without_source_lang():
     assert response.status_code == 200
 
     result = response.json()
-    assert "translation" in result
-    assert isinstance(result["translation"], list)
-    assert len(result["translation"]) == 1
+    translation = result["translation"]
 
-    translations = result["translation"][0]
-    assert "fr" in translations and isinstance(translations["fr"], str)
-    assert "de" in translations and isinstance(translations["de"], str)
-    assert len(translations["fr"]) > 0
-    assert len(translations["de"]) > 0
+    assert isinstance(translation, dict)
+    for lang in ["fr", "de"]:
+        assert lang in translation
+        assert isinstance(translation[lang], list)
+        assert len(translation[lang]) == 1
+        assert isinstance(translation[lang][0], str)
+        assert len(translation[lang][0]) > 0
 
 
-def test_translate_single_text():
+def test_translate_multiple_texts():
     request_data = {
-        "text": "The head of the United Nations says there is no military solution in Syria",
-        "source_lang": "en",
-        "target_lang": "fr"
+        "texts": ["Hello world", "How are you?"],
+        "target_langs": ["fr", "de"]
     }
-    response = client.post("/api/translate_single", json=request_data)
+    response = client.post("/api/translate", json=request_data)
     assert response.status_code == 200
 
     result = response.json()
-    assert "translation" in result
-    assert isinstance(result["translation"], dict)
-    assert "fr" in result["translation"]
-    assert isinstance(result["translation"]["fr"], str)
-    assert len(result["translation"]["fr"]) > 0
+    translation = result["translation"]
+
+    for lang in ["fr", "de"]:
+        assert lang in translation
+        assert isinstance(translation[lang], list)
+        assert len(translation[lang]) == 2  # Два текста -> два перевода
+        for translated_text in translation[lang]:
+            assert isinstance(translated_text, str)
+            assert len(translated_text) > 0
 
 
 def test_translate_invalid_data():
     request_data = {
-        "texts": [],
+        "texts": [],  # Пустой список текстов
         "source_lang": "en",
         "target_langs": ["fr"]
     }
     response = client.post("/api/translate", json=request_data)
-    assert response.status_code == 422
-
+    assert response.status_code == 422  # Ошибка валидации
 
 
 def test_translate_missing_parameter():
     request_data = {
-        "texts": ["Hello world"],
+        "texts": ["Hello world"],  # Нет параметра target_langs
         "source_lang": "en"
     }
     response = client.post("/api/translate", json=request_data)
-    assert response.status_code == 422
+    assert response.status_code == 422  # Ошибка валидации
 
 
 def test_translate_invalid_language():
     request_data = {
         "texts": ["Hello world"],
         "source_lang": "en",
-        "target_langs": ["xx"]
+        "target_langs": ["xx"]  # Неверный код языка
     }
     response = client.post("/api/translate", json=request_data)
     assert response.status_code == 200
 
     result = response.json()
-    assert "translation" in result
-    first_translation = result["translation"][0]
-    assert "xx" in first_translation
-    assert first_translation["xx"] == "Hello world"
+    translation = result["translation"]
+
+    assert "xx" in translation
+    assert isinstance(translation["xx"], list)
+    assert translation["xx"][0] == "Hello world"  # При ошибке возвращается исходный текст

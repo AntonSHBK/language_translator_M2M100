@@ -175,15 +175,19 @@
    http://127.0.0.1:8000/docs
    ```
 
+Конечно! Давай оформим документацию строго, без стикеров и смайликов, в деловом стиле.
+
+---
+
 ## Тестирование API
 
-Для тестирования API можно использовать **cURL**, **Postman** или **requests**. Вот примеры для отправки запросов.
+Для тестирования API можно использовать **cURL**, **Postman** или **requests**.
 
-### Пример запроса для перевода текста
+### Пример запроса на перевод текстов
 
 **POST** `/api/translate`
 
-Этот запрос переводит один или несколько текстов на несколько языков.
+Этот запрос переводит один или несколько текстов на один или несколько целевых языков.
 
 #### Тело запроса:
 
@@ -199,45 +203,19 @@
 
 ```json
 {
-  "translation": [
-    {
-      "fr": "Le chef des Nations Unies dit qu'il n'y a pas de solution militaire en Syrie",
-      "es": "El jefe de las Naciones Unidas dice que no hay solución militar en Siria",
-      "de": "UN-Chef sagt, es gibt keine militärische Lösung in Syrien"
-    }
-  ]
+  "translation": {
+    "fr": ["Le chef des Nations Unies dit qu'il n'y a pas de solution militaire en Syrie"],
+    "es": ["El jefe de las Naciones Unidas dice que no hay solución militar en Siria"],
+    "de": ["Der Chef der Vereinten Nationen sagt, es gibt keine militärische Lösung in Syrien"]
+  }
 }
 ```
 
-### Пример запроса для перевода одного текста
+---
 
-**POST** `/api/translate_single`
-
-Этот запрос переводит один текст на один целевой язык.
-
-#### Тело запроса:
-
-```json
-{
-  "text": "The head of the United Nations says there is no military solution in Syria",
-  "source_lang": "en",
-  "target_lang": "fr"
-}
-```
-
-#### Ответ:
-
-```json
-{
-  "translation": "Le chef des Nations Unies dit qu'il n'y a pas de solution militaire en Syrie"
-}
-```
-
-### Пример запроса для перевода батча текстов
+### Пример запроса на перевод нескольких текстов
 
 **POST** `/api/translate`
-
-Этот запрос переводит несколько текстов на несколько языков.
 
 #### Тело запроса:
 
@@ -253,53 +231,31 @@
 
 ```json
 {
-  "translation": [
-    {
-      "fr": "Bonjour, le monde!",
-      "es": "¡Hola, mundo!",
-      "de": "Hallo, Welt!"
-    },
-    {
-      "fr": "Comment ça va?",
-      "es": "¿Cómo estás?",
-      "de": "Wie geht's?"
-    },
-    {
-      "fr": "Bonjour!",
-      "es": "¡Buenos días!",
-      "de": "Guten Morgen!"
-    }
-  ]
+  "translation": {
+    "fr": ["Bonjour, le monde!", "Comment ça va?", "Bonjour!"],
+    "es": ["¡Hola, mundo!", "¿Cómo estás?", "¡Buenos días!"],
+    "de": ["Hallo, Welt!", "Wie geht's?", "Guten Morgen!"]
+  }
 }
 ```
 
+---
+
 ## Документация API
 
-Swagger UI генерирует документацию для вашего API, где вы можете увидеть все доступные маршруты и параметры:
+Swagger UI генерирует интерактивную документацию для всех маршрутов.
 
-1. **`POST /api/translate`**: Переводит текст на несколько языков.
-   - **Тело запроса**:
-     - `texts`: Список строк для перевода.
-     - `source_lang`: Исходный язык текста (опционально, если не указано, определяется автоматически).
-     - `target_langs`: Список целевых языков.
-   - **Ответ**:
-     - Возвращает переведенные строки для каждого языка в списке `target_langs` для каждого текста.
+### `POST /api/translate` — перевод текстов на целевые языки
 
-2. **`POST /api/translate_single`**: Переводит один текст на один целевой язык.
-   - **Тело запроса**:
-     - `text`: Строка для перевода.
-     - `source_lang`: Исходный язык текста (опционально, если не указано, определяется автоматически).
-     - `target_lang`: Целевой язык.
-   - **Ответ**:
-     - Возвращает переведенную строку для целевого языка.
+- **Тело запроса**:
+  - `texts`: Список строк для перевода (обязательный параметр).
+  - `source_lang`: Исходный язык текста (опционально, если не указан — определяется автоматически).
+  - `target_langs`: Список целевых языков (обязательный параметр).
 
-3. **`POST /api/batch_translate`**: Переводит несколько текстов на несколько языков.
-   - **Тело запроса**:
-     - `texts`: Список строк для перевода.
-     - `source_lang`: Исходный язык текста (опционально, если не указано, определяется автоматически).
-     - `target_langs`: Список целевых языков.
-   - **Ответ**:
-     - Возвращает переведенные строки для каждого текста на все целевые языки. Каждый переведенный текст представлен словарем, где ключами являются коды целевых языков. 
+- **Ответ**:
+  - Словарь, где:
+    - Ключи — коды целевых языков (`"fr"`, `"es"`, `"de"` и другие),
+    - Значения — списки переведённых текстов в том же порядке, что и входные.
 
 ## Логирование
 
@@ -311,7 +267,7 @@ Swagger UI генерирует документацию для вашего API
 
 ```bash
  pytest app/tests/test_api.py -v
- pytest app/tests/test_translate.py -v
+ pytest app/tests/test_model.py -v
 ```
 
 Тесты покрывают основные функции перевода текста и перевода батчей текстов.
