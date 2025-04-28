@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import List, Dict, Optional
 
 import torch
-from transformers import M2M100ForConditionalGeneration, M2M100Tokenizer
+from transformers import M2M100ForConditionalGeneration, M2M100Tokenizer, BitsAndBytesConfig
 from langdetect import detect, LangDetectException
 
 from app.models.base_model import BaseTranslationModel
@@ -46,13 +46,16 @@ class TranslationModel(BaseTranslationModel):
         Загружает модель и токенизатор.
         """
         self.logger.info(f"Загрузка модели {self.model_name}...")
+        
         self.model = M2M100ForConditionalGeneration.from_pretrained(
             self.model_name, 
-            cache_dir=str(self.cache_dir) if self.cache_dir else None
-        ).to(self.device)
+            cache_dir=str(self.cache_dir) if self.cache_dir else None,
+            device_map="auto",  
+        )
         self.tokenizer: M2M100Tokenizer = M2M100Tokenizer.from_pretrained(
             self.model_name, 
-            cache_dir=str(self.cache_dir) if self.cache_dir else None
+            cache_dir=str(self.cache_dir) if self.cache_dir else None,
+            use_fast=True
         )
         self.logger.info(f"Модель {self.model_name} успешно загружена на устройство {self.device}.")
 
