@@ -3,7 +3,8 @@ from pathlib import Path
 from typing import List, Dict, Optional
 
 import torch
-from transformers import M2M100ForConditionalGeneration, M2M100Tokenizer, BitsAndBytesConfig
+from transformers import M2M100ForConditionalGeneration, M2M100Tokenizer
+from hf_hub_ctranslate2 import MultiLingualTranslatorCT2fromHfHub
 from langdetect import detect, LangDetectException
 
 from app.models.base_model import BaseTranslationModel
@@ -369,3 +370,180 @@ class TranslationModel(BaseTranslationModel):
                 translations[target_lang].append(translated_text)
 
         return translations
+
+
+class TranslationModelQAT(TranslationModel):
+    """
+    Реализация модели переводчика на основе M2M100 с поддержкой QAT.
+    """
+
+    def __init__(
+        self, 
+        model_name: str = "michaelfeil/ct2fast-m2m100_418M", 
+        cache_dir: Path = Path(""), 
+        device: str = "cuda" if torch.cuda.is_available() else "cpu",
+        **kwargs
+    ):
+        super().__init__(model_name, cache_dir, device, **kwargs)
+
+        # Загрузка модели и токенизатора
+        self.model = None
+        self.tokenizer = None
+        self.load_model()
+        
+    def load_model(self):
+        """
+        Загружает квантованную модель и токенизатор.
+        """
+        self.logger.info(f"Загрузка модели {self.model_name}...")
+
+        self.tokenizer: M2M100Tokenizer = M2M100Tokenizer.from_pretrained(
+            "facebook/m2m100_418M",
+            cache_dir=str(self.cache_dir) if self.cache_dir else None,
+            # use_fast=True
+        )
+
+        compute_type = "int8_float16" if self.device == "cuda" else "int8"
+
+        self.model = MultiLingualTranslatorCT2fromHfHub(
+            model_name_or_path=self.model_name,
+            compute_type=compute_type,
+            device=self.device,
+            tokenizer=self.tokenizer,
+            hub_kwargs={"cache_dir": str(self.cache_dir)} if self.cache_dir else {},
+        )
+
+        self.logger.info(f"Модель {self.model_name} успешно загружена на устройство {self.device} с compute_type={compute_type}.")
+        
+    def _translate(
+        self,
+        text: List[str],
+        source_lang: List[str],
+        target_lang: List[str],
+        **generation_kwargs
+    ) -> str:
+            
+        result = self.model.generate(
+            text=text,
+            src_lang=source_lang,
+            tgt_lang=target_lang,
+            **generation_kwargs
+        )
+        return result
+    
+    def translate(
+        self,
+        text: str,
+        target_lang: str,
+        source_lang: Optional[str] = None,
+        **generation_kwargs
+    ) -> str:
+        """
+        Переводит длинный текст, при необходимости разбивает на блоки.
+        """
+
+        if source_lang is None:
+            detected = self.detect_language(text)
+            if detected is None:
+                return text
+            source_lang = detected
+
+        if not self.is_language_supported(source_lang):
+            self.logger.warning(f"Исходный язык {source_lang} не поддерживается.")
+            return text
+
+        if not self.is_language_supported(target_lang):
+            self.logger.warning(f"Целевой язык {target_lang} не поддерживается.")
+            return text
+
+        if "max_input_length" not in generation_kwargs:
+            generation_kwargs["max_input_length"] = 300
+
+        input_max_length = generation_kwargs["max_input_length"]
+        buffer_window = 10
+
+        blocks_texts = self.split_text_to_blocks(
+            text=text,
+            source_lang=source_lang,
+            max_tokens=input_max_length,
+            buffer=buffer_window,
+        )
+
+        block_translations = self._translate(
+            text=blocks_texts,
+            source_lang=[source_lang] * len(blocks_texts),
+            target_lang=[target_lang] * len(blocks_texts),
+            **generation_kwargs
+        )
+
+        if len(block_translations) == 1:
+            return block_translations[0]
+        return " ".join(block_translations)
+        
+    # def translate_batch(
+    #     self,
+    #     texts: List[str],        
+    #     target_langs: List[str],
+    #     source_lang: Optional[str] = None,
+    #     **generation_kwargs
+    # ) -> List[Dict[str, str]]:
+    #     """
+    #     Переводит список текстов на список целевых языков.
+    #     Для каждого target_lang делается отдельный батч.
+    #     """
+    #     if not texts:
+    #         return []
+
+    #     # Определяем исходные языки
+    #     source_languages = []
+    #     for text in texts:
+    #         if source_lang is None:
+    #             detected_lang = self.detect_language(text)
+    #             if not detected_lang:
+    #                 self.logger.warning(f"Не удалось определить язык текста: {text}")
+    #                 source_languages.append(None)
+    #             else:
+    #                 source_languages.append(detected_lang)
+    #         else:
+    #             source_languages.append(source_lang)
+
+    #     # Инициализация словаря результатов
+    #     translations_by_lang = {}
+
+    #     # Перебор по целевым языкам
+    #     for target_lang in target_langs:
+    #         if not self.is_language_supported(target_lang):
+    #             self.logger.warning(f"Целевой язык {target_lang} не поддерживается.")
+    #             translations_by_lang[target_lang] = texts  # если язык не поддерживается — просто возвращаем оригиналы
+    #             continue
+
+    #         batch_texts = []
+    #         batch_src_langs = []
+    #         valid_indices = []
+
+    #         for idx, (text, src) in enumerate(zip(texts, source_languages)):
+    #             if src is None or not self.is_language_supported(src):
+    #                 batch_texts.append(text)  # fallback на оригинал
+    #                 batch_src_langs.append("und")  # special case — undefined
+    #             else:
+    #                 batch_texts.append(text)
+    #                 batch_src_langs.append(src)
+
+    #             valid_indices.append(idx)
+
+    #         try:
+    #             results = self.model.generate(
+    #                 text=batch_texts,
+    #                 src_lang=batch_src_langs,
+    #                 tgt_lang=[target_lang] * len(batch_texts),
+    #                 **generation_kwargs
+    #             )
+    #         except Exception as e:
+    #             self.logger.error(f"Ошибка при генерации перевода на {target_lang}: {e}")
+    #             # Если ошибка — оригинальные тексты
+    #             translations_by_lang[target_lang] = texts
+    #             continue
+
+    #         translations_by_lang[target_lang] = results
+
+    #     return translations_by_lang

@@ -13,8 +13,8 @@ class Settings(BaseSettings):
     # Название модели по умолчанию
     # https://huggingface.co/facebook/m2m100_1.2B
     # MODEL_NAME: str = "facebook/m2m100_418M"
-    MODEL_NAME: str = "facebook/m2m100_1.2B"
-    # MODEL_NAME: str = "facebook/m2m100-12B-last-ckpt"
+    # MODEL_NAME: str = "facebook/m2m100_1.2B"
+    MODEL_NAME: str = "michaelfeil/ct2fast-m2m100_418M"
 
     # Директория для кэширования модели (относительно BASE_DIR)
     CACHE_DIR: Path = Field(default=BASE_DIR / "data" / "cache_dir")

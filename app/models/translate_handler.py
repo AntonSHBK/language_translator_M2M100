@@ -4,13 +4,13 @@ from pathlib import Path
 
 import torch
 
-from app.models.translate_model import TranslationModel
+from app.models.translate_model import TranslationModel, TranslationModelQAT
 
 
 class TranslateHandler:
     def __init__(
         self, 
-        model_name: str = "facebook/m2m100_418M", 
+        model_name: str = "michaelfeil/ct2fast-m2m100_418M", 
         cache_dir: Path = Path(""), 
         device: str = "cuda" if torch.cuda.is_available() else "cpu"
     ):
@@ -21,7 +21,7 @@ class TranslateHandler:
         :param cache_dir: Директория для кэширования модели.
         :param device: Устройство для выполнения модели ("cuda" или "cpu").
         """
-        self.model = TranslationModel(
+        self.model = TranslationModelQAT(
             model_name=model_name,
             cache_dir=cache_dir,
             device=device
