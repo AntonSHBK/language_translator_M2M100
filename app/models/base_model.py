@@ -38,7 +38,6 @@ class BaseTranslationModel(ABC):
         # Используем логгер из utils
         self.logger = logging.getLogger("model")
 
-
     @abstractmethod
     def load_model(self):
         """

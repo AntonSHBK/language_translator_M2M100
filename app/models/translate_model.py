@@ -422,13 +422,14 @@ class TranslationModelCT2(TranslationModel):
         target_lang: List[str],
         **generation_kwargs
     ) -> str:
-            
+        self.logger.info(f"Модель переводит текст")
         result = self.model.generate(
             text=text,
             src_lang=source_lang,
             tgt_lang=target_lang,
             **generation_kwargs
         )
+        self.logger.info(f"Текст переведён")
         return result
     
     def translate(
@@ -441,6 +442,16 @@ class TranslationModelCT2(TranslationModel):
         """
         Переводит длинный текст, при необходимости разбивает на блоки.
         """
+        if not text.strip() or not re.search(r'[A-Za-zА-Яа-яЁё]', text):
+            self.logger.warning("Пустой ввод или отсутствие букв в тексте.")
+            return text
+        
+        self.logger.info(f'''
+Входные данные:
+    Исходный текст: {text};
+    Исходный язык: {source_lang};
+    Целевой язык: {target_lang}.
+''')
 
         if source_lang is None:
             detected = self.detect_language(text)
@@ -468,14 +479,13 @@ class TranslationModelCT2(TranslationModel):
             max_tokens=input_max_length,
             buffer=buffer_window,
         )
-
+        
         block_translations = self._translate(
             text=blocks_texts,
             source_lang=[source_lang] * len(blocks_texts),
             target_lang=[target_lang] * len(blocks_texts),
             **generation_kwargs
         )
-
         if len(block_translations) == 1:
-            return block_translations[0]
+            return block_translations[0]        
         return " ".join(block_translations)

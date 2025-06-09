@@ -42,6 +42,7 @@ class TranslateHandler:
         :return: Словарь вида {язык: [переводы]}.
         """
         try:
+            # self.model.logger.info(f"")
             translated_texts = self.model.translate_batch(
                 texts=texts,
                 source_lang=source_lang,
