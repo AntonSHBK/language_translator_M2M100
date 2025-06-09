@@ -8,12 +8,12 @@ from pathlib import Path
 # Добавляем путь к корневой директории проекта
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
-from app.models.translate_model import TranslationModelQAT
+from app.models.translate_model import TranslationModelCT2
 
 
 @pytest.fixture(scope="module")
 def translation_model():
-    return TranslationModelQAT(
+    return TranslationModelCT2(
         model_name="michaelfeil/ct2fast-m2m100_418M",
         cache_dir=Path("./app/data/cache_dir"),
         device="cpu"  # Для тестирования используем CPU

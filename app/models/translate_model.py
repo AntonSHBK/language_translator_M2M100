@@ -372,9 +372,9 @@ class TranslationModel(BaseTranslationModel):
         return translations
 
 
-class TranslationModelQAT(TranslationModel):
+class TranslationModelCT2(TranslationModel):
     """
-    Реализация модели переводчика на основе M2M100 с поддержкой QAT.
+    Реализация модели переводчика на основе M2M100 с поддержкой CT2.
     """
 
     def __init__(
@@ -457,7 +457,7 @@ class TranslationModelQAT(TranslationModel):
             return text
 
         if "max_input_length" not in generation_kwargs:
-            generation_kwargs["max_input_length"] = 300
+            generation_kwargs["max_input_length"] = 128
 
         input_max_length = generation_kwargs["max_input_length"]
         buffer_window = 10
@@ -479,71 +479,3 @@ class TranslationModelQAT(TranslationModel):
         if len(block_translations) == 1:
             return block_translations[0]
         return " ".join(block_translations)
-        
-    # def translate_batch(
-    #     self,
-    #     texts: List[str],        
-    #     target_langs: List[str],
-    #     source_lang: Optional[str] = None,
-    #     **generation_kwargs
-    # ) -> List[Dict[str, str]]:
-    #     """
-    #     Переводит список текстов на список целевых языков.
-    #     Для каждого target_lang делается отдельный батч.
-    #     """
-    #     if not texts:
-    #         return []
-
-    #     # Определяем исходные языки
-    #     source_languages = []
-    #     for text in texts:
-    #         if source_lang is None:
-    #             detected_lang = self.detect_language(text)
-    #             if not detected_lang:
-    #                 self.logger.warning(f"Не удалось определить язык текста: {text}")
-    #                 source_languages.append(None)
-    #             else:
-    #                 source_languages.append(detected_lang)
-    #         else:
-    #             source_languages.append(source_lang)
-
-    #     # Инициализация словаря результатов
-    #     translations_by_lang = {}
-
-    #     # Перебор по целевым языкам
-    #     for target_lang in target_langs:
-    #         if not self.is_language_supported(target_lang):
-    #             self.logger.warning(f"Целевой язык {target_lang} не поддерживается.")
-    #             translations_by_lang[target_lang] = texts  # если язык не поддерживается — просто возвращаем оригиналы
-    #             continue
-
-    #         batch_texts = []
-    #         batch_src_langs = []
-    #         valid_indices = []
-
-    #         for idx, (text, src) in enumerate(zip(texts, source_languages)):
-    #             if src is None or not self.is_language_supported(src):
-    #                 batch_texts.append(text)  # fallback на оригинал
-    #                 batch_src_langs.append("und")  # special case — undefined
-    #             else:
-    #                 batch_texts.append(text)
-    #                 batch_src_langs.append(src)
-
-    #             valid_indices.append(idx)
-
-    #         try:
-    #             results = self.model.generate(
-    #                 text=batch_texts,
-    #                 src_lang=batch_src_langs,
-    #                 tgt_lang=[target_lang] * len(batch_texts),
-    #                 **generation_kwargs
-    #             )
-    #         except Exception as e:
-    #             self.logger.error(f"Ошибка при генерации перевода на {target_lang}: {e}")
-    #             # Если ошибка — оригинальные тексты
-    #             translations_by_lang[target_lang] = texts
-    #             continue
-
-    #         translations_by_lang[target_lang] = results
-
-    #     return translations_by_lang

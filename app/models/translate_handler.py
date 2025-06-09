@@ -4,7 +4,7 @@ from pathlib import Path
 
 import torch
 
-from app.models.translate_model import TranslationModel, TranslationModelQAT
+from app.models.translate_model import TranslationModel, TranslationModelCT2
 
 
 class TranslateHandler:
@@ -21,7 +21,7 @@ class TranslateHandler:
         :param cache_dir: Директория для кэширования модели.
         :param device: Устройство для выполнения модели ("cuda" или "cpu").
         """
-        self.model = TranslationModelQAT(
+        self.model = TranslationModelCT2(
             model_name=model_name,
             cache_dir=cache_dir,
             device=device
